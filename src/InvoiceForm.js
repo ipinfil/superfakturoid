@@ -1,4 +1,4 @@
-import { Button, Pane, SelectField, Text, TextInputField } from "evergreen-ui";
+import { Button, Pane, SelectField, Text, TextInputField, toaster } from "evergreen-ui";
 import { useState } from "react";
 
 const InvoiceForm = (props) => {
@@ -13,18 +13,18 @@ const InvoiceForm = (props) => {
 
     // months
     const months = [
-        {name: 'Január', value: 1},
-        {name: 'Február', value: 2},
-        {name: 'Marec', value: 3},
-        {name: 'Apríl', value: 4},
-        {name: 'Máj', value: 5},
-        {name: 'Jún', value: 6},
-        {name: 'Júl', value: 7},
-        {name: 'August', value: 8},
-        {name: 'September', value: 9},
-        {name: 'Október', value: 10},
-        {name: 'November', value: 11},
-        {name: 'December', value: 12},
+        { name: 'Január', value: 1 },
+        { name: 'Február', value: 2 },
+        { name: 'Marec', value: 3 },
+        { name: 'Apríl', value: 4 },
+        { name: 'Máj', value: 5 },
+        { name: 'Jún', value: 6 },
+        { name: 'Júl', value: 7 },
+        { name: 'August', value: 8 },
+        { name: 'September', value: 9 },
+        { name: 'Október', value: 10 },
+        { name: 'November', value: 11 },
+        { name: 'December', value: 12 },
     ];
 
     let lastMonthNum = new Date();
@@ -56,13 +56,92 @@ const InvoiceForm = (props) => {
         setMonth(event.target.value);
     }
 
-    const handleSubmit = (event) => {
+    const handleSubmit = async (event) => {
+        event.preventDefault();
 
+        // save values to local storage
+        localStorage.setItem('cost', cost);
+
+        let deliveryDate = new Date();
+        deliveryDate.setMonth(month - 1);
+
+        if (month > actualMonthNum) {
+            deliveryDate.setFullYear(deliveryDate.getFullYear() - 1);
+        }
+
+        let lastMonthDay = (new Date(deliveryDate.getFullYear(), month, 0)).getDate();
+        deliveryDate.setDate(lastMonthDay);
+        deliveryDate = deliveryDate.toLocaleDateString('en-CA')
+
+        let dueDate = new Date();
+        dueDate.setDate(15);
+        dueDate = dueDate.toLocaleDateString('en-CA');
+
+        const data = {
+            Invoice: {
+                created: deliveryDate,
+                delivery: deliveryDate,
+                due: dueDate
+            },
+            InvoiceItem: [{
+                name: "Programovanie",
+                tax: 0,
+                unit_price: cost,
+                unit: "h",
+                quantity: hours
+            }],
+            Client: {
+                ico: companyId,
+                name: 'Riešenia, spol. s r.o.',
+                address: 'Mestská 10',
+                city: 'Bratislava',
+                country_id: '191',
+                dic: '2022041186',
+                ic_dph: 'SK2022041186',
+                zip: '831 03'
+            }
+        };
+
+        let response = await fetch(process.env.REACT_APP_API_URL, {
+            mode: 'cors',
+            method: 'post',
+            body: 'data=' + JSON.stringify(data),
+            headers: {
+                'Content-Type': 'text/plain',
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Response error: ' + response.status + ' ' + response.statusText);
+            return;
+        }
+
+        toaster.success('Faktúra bola úspešne vytvorená. Počkajte na presmerovanie na PDF.');
+
+        // start download after 2 secs
+        setTimeout(async () => {
+            const blob = new Blob([await response.blob()]);
+            const blobURL = window.URL.createObjectURL(blob);
+
+            const tempLink = document.createElement('a');
+            tempLink.style.display = 'none';
+            tempLink.href = blobURL;
+            tempLink.download = 'invoice.pdf';
+            if (typeof tempLink.download === 'undefined') {
+                tempLink.setAttribute('target', '_blank');
+            }
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            document.body.removeChild(tempLink);
+            setTimeout(() => {
+                window.URL.revokeObjectURL(blobURL);
+            }, 100);
+        }, 2000);
     };
 
     return (
         <Pane padding="20px" width="50%" minWidth="250px" alignItems="center" elevation={1} backgroundColor="white" borderRadius="5px">
-            <form>
+            <form onSubmit={handleSubmit}>
                 <Pane display="flex" columnGap="15px">
                     <TextInputField
                         isInvalid={isHoursInvalid}
